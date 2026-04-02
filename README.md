@@ -2,6 +2,9 @@
 
 LoRA QuickPick is a visual LoRA picker extension for Stable Diffusion WebUI environments.
 
+<img width="899" height="604" alt="8689" src="https://github.com/user-attachments/assets/2fe3138e-54fe-45d2-9750-62b22d4d18f0" />
+
+
 Primary target:
 - Forge Neo
 
