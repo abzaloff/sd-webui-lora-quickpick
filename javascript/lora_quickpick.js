@@ -83,7 +83,7 @@
   function readFavorites(){ try{ return JSON.parse(localStorage.getItem(LS_KEYS.favorites) || "[]"); }catch{ return []; } }
   function writeFavorites(arr){ localStorage.setItem(LS_KEYS.favorites, JSON.stringify(arr||[])); }
 
-  // --- общие избранные для txt2img и img2img ---
+  // --- shared favorites for txt2img and img2img ---
   let FavoritesRef = null;
   function getFavorites(){
     if (!Array.isArray(FavoritesRef)) FavoritesRef = readFavorites();
@@ -104,7 +104,7 @@
     const wrapper = el("div", { id: rootId });
     const label = el("div", { class: "lqp-label" }, "LoRA QuickPick");
     const box = el("div", { class: "lqp-box", tabindex: "0" });
-    const placeholder = el("span", { class: "lqp-placeholder" }, "Кликните, чтобы выбрать LoRA…");
+    const placeholder = el("span", { class: "lqp-placeholder" }, "Click to select LoRA...");
     box.append(placeholder);
     wrapper.append(label, box);
 
@@ -126,17 +126,17 @@
     function renderBox() {
       box.innerHTML = "";
       if (!selected.size) {
-        box.append(el("span", { class: "lqp-placeholder" }, "Кликните, чтобы выбрать LoRA…"));
+        box.append(el("span", { class: "lqp-placeholder" }, "Click to select LoRA..."));
       } else {
         Array.from(selected).forEach(([name, obj]) => {
           const w = (obj && typeof obj.w === "number") ? obj.w : 1.0;
           const on = (obj && typeof obj.on === "boolean") ? obj.on : true;
 
           const chip = el("div", { class: "lqp-chip" + (on ? "" : " off"), draggable: "true", dataset: { name } });
-          const chk = el("input", { type: "checkbox", ...(on ? {checked:"checked"} : {}) , title:"Вкл/выкл LoRA"});
+          const chk = el("input", { type: "checkbox", ...(on ? {checked:"checked"} : {}) , title:"Enable/disable LoRA"});
           const nm = el("span", {}, name);
-          const wt = el("span", { class: "lqp-w", title: "Тяните по горизонтали" }, w.toFixed(2));
-          const rm = el("button", { type: "button", class: "lqp-x", title: "Убрать" }, "×");
+          const wt = el("span", { class: "lqp-w", title: "Drag horizontally" }, w.toFixed(2));
+          const rm = el("button", { type: "button", class: "lqp-x", title: "Remove" }, "×");
 
           let dragging = false, sx = 0, sw = w;
           wt.addEventListener("mousedown", (e) => {
@@ -190,14 +190,14 @@
         return b;
       };
 
-      addBtn("Вкл/выкл все", "◎", () => {
+      addBtn("Enable/disable all", "◎", () => {
         const anyOff = Array.from(selected.values()).some(v => !v || v.on === false);
         selected.forEach((v, k) => { const obj = v || {w:1,on:true}; obj.on = anyOff; selected.set(k, obj); });
         renderBox();
       });
 
-      addBtn("Сохранить пресет", "💾", () => {
-        const name = prompt("Имя пресета:");
+      addBtn("Save preset", "💾", () => {
+        const name = prompt("Preset name:");
         if (!name) return;
         const items = Array.from(selected).map(([n, o]) => ({ name: n, w: (o && typeof o.w==='number')?o.w:1.0, on: !!(o && o.on) }));
         presets[name] = { items, ts: Date.now() };
@@ -205,9 +205,9 @@
         closePresetMenu();
       });
 
-      addBtn("Загрузить пресет", "📂", () => { openPresetMenu(actions); });
+      addBtn("Load preset", "📂", () => { openPresetMenu(actions); });
 
-      addBtn("Экспорт избранного и пресетов (JSON)", "⇩", () => {
+      addBtn("Export favorites and presets (JSON)", "⇩", () => {
         const data = { version:"1.0", favorites, presets };
         const blob = new Blob([JSON.stringify(data,null,2)], {type:"application/json"});
         const url = URL.createObjectURL(blob);
@@ -216,7 +216,7 @@
         setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 0);
       });
 
-      addBtn("Импорт избранного и пресетов (JSON)", "⇧", () => {
+      addBtn("Import favorites and presets (JSON)", "⇧", () => {
         const inp = document.createElement("input");
         inp.type = "file"; inp.accept = "application/json";
         inp.addEventListener("change", () => {
@@ -232,15 +232,15 @@
               }
               if (data && data.presets) { presets = (typeof data.presets === "object" && data.presets) ? data.presets : presets; writePresets(presets); }
               closePresetMenu();
-              alert("Импорт выполнен");
-            }catch(err){ alert("Не удалось импортировать JSON"); }
+              alert("Import completed");
+            }catch(err){ alert("Failed to import JSON"); }
           };
           fr.readAsText(file, "utf-8");
         });
         inp.click();
       });
 
-      addBtn("Очистить все", "×", () => { selected.clear(); renderBox(); });
+      addBtn("Clear all", "×", () => { selected.clear(); renderBox(); });
 
       box.append(actions);
       ensureActionsPadding(actions);
@@ -252,17 +252,17 @@
     function openPresetMenu(anchor){
       closePresetMenu();
       const presetMenu = el("div", { class: "lqp-preset-menu" });
-      const hdr = el("div", { class: "hdr" }, el("div", {}, "Пресеты"), el("button", { class: "lqp-btn", type: "button" }, "×"));
+      const hdr = el("div", { class: "hdr" }, el("div", {}, "Presets"), el("button", { class: "lqp-btn", type: "button" }, "×"));
       hdr.lastChild.addEventListener("click", closePresetMenu);
       const list = el("div", { class: "list" });
       const names = Object.keys(presets||{}).sort((a,b)=>a.localeCompare(b));
       if (!names.length){
-        list.append(el("div", { class:"row", style: { opacity: 0.6 } }, "Нет сохранённых пресетов"));
+        list.append(el("div", { class:"row", style: { opacity: 0.6 } }, "No saved presets"));
       } else {
         names.forEach(name => {
           const row = el("div", { class: "row" });
-          const btn = el("button", { class: "lqp-btn", type: "button", title:"Загрузить" }, name);
-          const del = el("button", { class: "lqp-btn", type: "button", title:"Удалить" }, "×");
+          const btn = el("button", { class: "lqp-btn", type: "button", title:"Load" }, name);
+          const del = el("button", { class: "lqp-btn", type: "button", title:"Delete" }, "×");
           btn.addEventListener("click", () => {
             const p = presets[name];
             if (!p || !Array.isArray(p.items)) return;
@@ -271,7 +271,7 @@
             renderBox(); closePresetMenu();
           });
           del.addEventListener("click", () => {
-            if (!confirm(`Удалить пресет "${name}"?`)) return;
+            if (!confirm(`Delete preset "${name}"?`)) return;
             delete presets[name]; writePresets(presets);
             openPresetMenu(anchor);
           });
@@ -296,17 +296,17 @@
       const left = el("div", { class: "lqp-left" });
       const right = el("div", { class: "lqp-right" });
       const top = el("div", { class: "lqp-top" });
-      const search = el("input", { class: "lqp-search", placeholder: "Поиск…" });
+      const search = el("input", { class: "lqp-search", placeholder: "Search..." });
 
       const allKey = LS_KEYS.searchAll;
       const allPref = localStorage.getItem(allKey);
       const allInit = (allPref === null) ? true : (allPref === "1");
-      const allToggle = el("label", { class: "lqp-all", title: "Искать по всем папкам (только когда строка поиска не пустая)" },
+      const allToggle = el("label", { class: "lqp-all", title: "Search across all folders (only when the search query is not empty)" },
         el("input", { type:"checkbox", ...(allInit ? {checked:"checked"} : {}) }),
-        el("span", {}, "везде")
+        el("span", {}, "everywhere")
       );
 
-      const refreshBtn = el("button", { class: "lqp-refresh", title: "Обновить список (без Reload UI)" }, "⟳");
+      const refreshBtn = el("button", { class: "lqp-refresh", title: "Refresh list (without UI reload)" }, "⟳");
 
       top.append(search, allToggle, refreshBtn);
       // --- Grid mode controls ---
@@ -394,11 +394,11 @@
       }
 `; document.head.appendChild(s);} })();
       const modeBar = el('div', { class:'lqp-modebar' });
-      const btnList = el('button', { class:'lqp-btn', title:'Список', type:'button' }, '≣');
-      const btnGrid = el('button', { class:'lqp-btn', title:'Сетка',  type:'button' }, '▦');
-      const btnS = el('button', { class:'lqp-btn', title:'5 в ряд', type:'button' }, 'S');
-      const btnM = el('button', { class:'lqp-btn', title:'4 в ряд', type:'button' }, 'M');
-      const btnL = el('button', { class:'lqp-btn', title:'3 в ряд', type:'button' }, 'L');
+      const btnList = el('button', { class:'lqp-btn', title:'List', type:'button' }, '≣');
+      const btnGrid = el('button', { class:'lqp-btn', title:'Grid',  type:'button' }, '▦');
+      const btnS = el('button', { class:'lqp-btn', title:'5 per row', type:'button' }, 'S');
+      const btnM = el('button', { class:'lqp-btn', title:'4 per row', type:'button' }, 'M');
+      const btnL = el('button', { class:'lqp-btn', title:'3 per row', type:'button' }, 'L');
       modeBar.append(btnList, btnGrid, btnS, btnM, btnL);
       top.append(modeBar);
 
@@ -412,7 +412,7 @@
       function applySize(){ grid.classList.remove('lqp-grid--s','lqp-grid--m','lqp-grid--l'); grid.classList.add('lqp-grid--'+viewSize); btnS.classList.toggle('is-active',viewSize==='s'); btnM.classList.toggle('is-active',viewSize==='m'); btnL.classList.toggle('is-active',viewSize==='l'); }
 
       function rebuildGrid(){
-        const prevScroll = grid.scrollTop;          // <--- сохраняем текущий скролл
+        const prevScroll = grid.scrollTop;          // <--- keep current scroll
         grid.replaceChildren();
         const rows = list.querySelectorAll('.lqp-item');
         rows.forEach((r)=>{
@@ -426,7 +426,7 @@
           const tile = el('button', { class:'lqp-tile', type:'button', title:name });
           const img = new Image(); img.className='lqp-tile__img'; let i=0; img.onerror=()=>{ if(i<cands.length) img.src=cands[i++]; else { img.remove(); tile.classList.add('lqp-tile--empty'); } }; img.onload=()=>{}; img.src=cands[i++];
           const cap = el('div', { class:'lqp-tile__caption' }, name);
-          const star = el('span', { class:'star', title:'В избранное / убрать' }, isFav ? '★' : '☆');
+          const star = el('span', { class:'star', title:'Add to favorites / remove' }, isFav ? '★' : '☆');
           star.addEventListener('click', (e)=>{
             e.stopPropagation();
             const k = favKey;
@@ -442,7 +442,7 @@
           tile.append(img, cap, star);
           grid.appendChild(tile);
         });
-        grid.scrollTop = prevScroll;                // <--- и возвращаем его
+        grid.scrollTop = prevScroll;                // <--- and restore it
       }
 
       btnList.onclick=()=>{viewMode='list'; localStorage.setItem(MODE_KEY,'list'); applyMode();};
@@ -452,7 +452,7 @@
       btnL.onclick=()=>{viewSize='l'; localStorage.setItem(SIZE_KEY,'l'); applySize();};
       if(!['list','grid'].includes(viewMode)) viewMode='list'; if(!['s','m','l'].includes(viewSize)) viewSize='m'; applyMode(); applySize();
 
-      // >>> изменённый MutationObserver: реагируем только на добавление/удаление .lqp-item
+      // >>> adjusted MutationObserver: react only to add/remove of .lqp-item
       const mo = new MutationObserver((mutations) => {
         if (viewMode !== 'grid') return;
 
@@ -473,7 +473,7 @@
         if (needsRebuild) rebuildGrid();
       });
       mo.observe(list, { childList:true, subtree:true });
-      // <<< конец изменения
+      // <<< end of change
 
       menu.append(left, right);
       wrapper.append(menu);
@@ -484,27 +484,27 @@
         if (rect.right > vw - 8){ menu.style.left = "auto"; menu.style.right = "0"; }
       });
 
-      const folders = ["★ Избранное", ...Object.keys(State.folders||{})];
-      let current = (lastFolder && folders.includes(lastFolder)) ? lastFolder : (folders.includes("★ Избранное") && favorites.length ? "★ Избранное" : (folders.includes("") ? "" : folders[0] || ""));
+      const folders = ["★ Favorites", ...Object.keys(State.folders||{})];
+      let current = (lastFolder && folders.includes(lastFolder)) ? lastFolder : (folders.includes("★ Favorites") && favorites.length ? "★ Favorites" : (folders.includes("") ? "" : folders[0] || ""));
       let lastRenderKey = null;
 
       function renderFolders() {
         left.innerHTML = "";
         folders.forEach((f) => {
           const b = el("button", { class: "lqp-folder" + (f === current ? " active" : ""), type: "button" }, f || "(root)");
-          b.addEventListener("click", () => { current = f; lastFolder = f === "★ Избранное" ? lastFolder : f; localStorage.setItem(LS_KEYS.lastFolder, lastFolder); renderFolders(); renderLoras(); });
+          b.addEventListener("click", () => { current = f; lastFolder = f === "★ Favorites" ? lastFolder : f; localStorage.setItem(LS_KEYS.lastFolder, lastFolder); renderFolders(); renderLoras(); });
           left.appendChild(b);
         });
       }
 
       function listForFolder(folderKey){
-        if (folderKey === "★ Избранное"){
+        if (folderKey === "★ Favorites"){
           const items = [];
           favorites.forEach(k=>{
             const [fk, name] = k.split("::");
             if(State.folders[fk] && State.folders[fk].includes(name)) items.push({folder: fk, name});
           });
-          // отображаем избранное в алфавитном порядке, не меняя порядок в хранилище
+          // show favorites in alphabetical order without changing storage order
           items.sort((a, b) => a.name.localeCompare(b.name));
           return items;
         } else {
@@ -533,7 +533,7 @@
         if (q) items = items.filter(it=> it.name.toLowerCase().includes(q));
 
         if (!items.length) {
-          list.append(el("div", { class: "lqp-item", style: { opacity: 0.6, cursor: "default" } }, "Пусто"));
+          list.append(el("div", { class: "lqp-item", style: { opacity: 0.6, cursor: "default" } }, "Empty"));
           lastRenderKey = curKey;
           list.scrollTop = sameContext ? prevScroll : 0;
           return;
@@ -544,7 +544,7 @@
           const tw = State.triggers[it.name];
           const hint = tw && tw.length ? `  —  ${tw.join(", ")}` : "";
           const favKey = `${it.folder}::${it.name}`;
-          const star = el("span", { class: "star", title: "В избранное / убрать" }, (favorites.includes(favKey) ? "★" : "☆"));
+          const star = el("span", { class: "star", title: "Add to favorites / remove" }, (favorites.includes(favKey) ? "★" : "☆"));
           const row = el("button", { class: "lqp-item", type: "button", dataset: { name: it.name, folder: it.folder }, title: `${it.folder ? it.folder + " / " : ""}${it.name}${hint}` }, leftName, star);
           row.addEventListener("click", (e) => {
             if (e.target === star){ 
@@ -557,7 +557,7 @@
             }
             const defW = (State.prefs && typeof State.prefs[it.name] === "number" && State.prefs[it.name] > 0) ? State.prefs[it.name] : 1.0;
             if (!selected.has(it.name)) selected.set(it.name, { w: defW, on: true });
-            lastFolder = current !== "★ Избранное" ? current : lastFolder;
+            lastFolder = current !== "★ Favorites" ? current : lastFolder;
             localStorage.setItem(LS_KEYS.lastFolder, lastFolder);
             renderBox();
           });

@@ -292,6 +292,7 @@ def _register(app: FastAPI):
                     for alt in (f"{nm}.{ext}".lower(), f"{nm}.{ext}".upper()):
                         hit = try_send(os.path.join(base, rel, alt))
                         if hit: return hit
+        image_exts = {'.png', '.jpg', '.jpeg', '.webp'}
         for base in _get_lora_roots():
             base_depth = base.count(os.sep)
             for cur, _, files in os.walk(base, followlinks=True):
@@ -299,10 +300,13 @@ def _register(app: FastAPI):
                     continue
                 for nm in name_variants(name):
                     for f in files:
-                        stem = f.rsplit('.',1)[0]
-                        if stem.lower() == nm.lower():
+                        stem, file_ext = os.path.splitext(f)
+                        if stem.lower() == nm.lower() and file_ext.lower() in image_exts:
                             p1 = os.path.join(cur, f"{nm}.{ext}")
-                            return FileResponse(p1 if os.path.exists(p1) else os.path.join(cur, f), headers={'Cache-Control':'public, max-age=604800'})
+                            return FileResponse(
+                                p1 if os.path.exists(p1) else os.path.join(cur, f),
+                                headers={'Cache-Control':'public, max-age=604800'}
+                            )
         return Response(status_code=404)
 def on_app_started(_: gr.Blocks, app: FastAPI):
     _register(app)
