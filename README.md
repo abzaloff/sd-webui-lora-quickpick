@@ -75,6 +75,7 @@ It can extract:
 3. Click the input box to open the LoRA browser.
 4. Select one or more LoRAs.
 5. Adjust order and weight.
+   - Change weight by dragging the weight value left or right with the mouse.
 6. Click **Generate**.
 
 On generate, the extension temporarily injects:
