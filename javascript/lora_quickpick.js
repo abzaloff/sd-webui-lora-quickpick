@@ -2,7 +2,7 @@
   const EXT_ID = "lora-quickpick";
   const EXT_ID_IMG2IMG = "lora-quickpick-img2img";
   window._lqpGetSelected = window._lqpGetSelected || {};
-  const WEIGHT_MIN = 0.0, WEIGHT_MAX = 5.0;
+  const WEIGHT_MIN = -4.0, WEIGHT_MAX = 4.0;
   const app = () => gradioApp();
   const qs = (sel, root = app()) => root.querySelector(sel);
   const qsa = (sel, root = app()) => root.querySelectorAll(sel);
@@ -129,13 +129,13 @@
         box.append(el("span", { class: "lqp-placeholder" }, "Click to select LoRA..."));
       } else {
         Array.from(selected).forEach(([name, obj]) => {
-          const w = (obj && typeof obj.w === "number") ? obj.w : 1.0;
+          const w = (obj && typeof obj.w === "number") ? clamp(obj.w, WEIGHT_MIN, WEIGHT_MAX) : 1.0;
           const on = (obj && typeof obj.on === "boolean") ? obj.on : true;
 
           const chip = el("div", { class: "lqp-chip" + (on ? "" : " off"), draggable: "true", dataset: { name } });
           const chk = el("input", { type: "checkbox", ...(on ? {checked:"checked"} : {}) , title:"Enable/disable LoRA"});
           const nm = el("span", {}, name);
-          const wt = el("span", { class: "lqp-w", title: "Drag horizontally" }, w.toFixed(2));
+          const wt = el("span", { class: "lqp-w", title: "Drag horizontally (Alt for fine adjust)" }, w.toFixed(2));
           const rm = el("button", { type: "button", class: "lqp-x", title: "Remove" }, "×");
 
           let dragging = false, sx = 0, sw = w;
@@ -145,7 +145,8 @@
           });
           document.addEventListener("mousemove", (e) => {
             if (!dragging) return;
-            const nw = Math.min(2.0, Math.max(0.0, Math.round((sw + (e.clientX - sx) / 150) / 0.05) * 0.05));
+            const dragDiv = e.altKey ? 120 : 40;
+            const nw = clamp(Math.round((sw + (e.clientX - sx) / dragDiv) / 0.05) * 0.05, WEIGHT_MIN, WEIGHT_MAX);
             const obj = selected.get(name) || {w:1,on:true};
             obj.w = nw; selected.set(name, obj);
             wt.textContent = nw.toFixed(2);
@@ -267,7 +268,7 @@
             const p = presets[name];
             if (!p || !Array.isArray(p.items)) return;
             selected.clear();
-            p.items.forEach(it => { selected.set(it.name, { w: (typeof it.w==='number'?it.w:1.0), on: !!it.on }); });
+            p.items.forEach(it => { selected.set(it.name, { w: (typeof it.w==='number' ? clamp(it.w, WEIGHT_MIN, WEIGHT_MAX) : 1.0), on: !!it.on }); });
             renderBox(); closePresetMenu();
           });
           del.addEventListener("click", () => {
@@ -555,7 +556,8 @@
               star.textContent = (favorites.includes(k) ? "★" : "☆");
               return;
             }
-            const defW = (State.prefs && typeof State.prefs[it.name] === "number" && State.prefs[it.name] > 0) ? State.prefs[it.name] : 1.0;
+            const prefW = Number(State?.prefs?.[it.name]);
+            const defW = Number.isFinite(prefW) ? clamp(prefW, WEIGHT_MIN, WEIGHT_MAX) : 1.0;
             if (!selected.has(it.name)) selected.set(it.name, { w: defW, on: true });
             lastFolder = current !== "★ Favorites" ? current : lastFolder;
             localStorage.setItem(LS_KEYS.lastFolder, lastFolder);
@@ -605,7 +607,7 @@
 
     renderBox();
 
-    return { wrapper, getSelected: () => Array.from(selected).filter(([_, obj]) => (obj && obj.on)).map(([name, obj]) => ({ name, weight: (obj && typeof obj.w==='number') ? obj.w : 1.0 })) };
+    return { wrapper, getSelected: () => Array.from(selected).filter(([_, obj]) => (obj && obj.on)).map(([name, obj]) => ({ name, weight: (obj && typeof obj.w==='number') ? clamp(obj.w, WEIGHT_MIN, WEIGHT_MAX) : 1.0 })) };
   }
 
   function findPromptContainerFrom(el){
