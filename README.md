@@ -122,3 +122,7 @@ In browser `localStorage` on the client side.
 
 No. LoRA selection still works without sidecar files.
 Sidecar metadata is only needed for auto trigger words and preferred weight.
+
+## License
+
+See [LICENSE.md](LICENSE.md).
