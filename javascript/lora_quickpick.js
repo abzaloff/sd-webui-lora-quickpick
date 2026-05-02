@@ -189,7 +189,7 @@
           });
           document.addEventListener("mousemove", (e) => {
             if (!dragging) return;
-            const dragDiv = e.altKey ? 120 : 40;
+            const dragDiv = e.altKey ? 120 : 80;
             const nw = clamp(Math.round((sw + (e.clientX - sx) / dragDiv) / 0.05) * 0.05, WEIGHT_MIN, WEIGHT_MAX);
             const obj = selected.get(name) || {w:1,on:true};
             obj.w = nw; selected.set(name, obj);
