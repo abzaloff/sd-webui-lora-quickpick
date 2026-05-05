@@ -367,7 +367,7 @@
       #lora-quickpick .lqp-tile{ position:relative; aspect-ratio:1/1; border:1px solid var(--lqp-border); border-radius:.6rem; overflow:hidden; display:flex; align-items=end; justify-content:center; background:var(--lqp-surface); }
       #lora-quickpick .lqp-tile__img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
       #lora-quickpick .lqp-tile__caption{ position:relative; z-index:1; padding:.35rem .5rem; background:var(--lqp-overlay); width:100%; text-align:center; font-size:.85rem; color:var(--lqp-text); }
-      #lora-quickpick .lqp-tile--empty{ background:var(--lqp-bg); }
+      #lora-quickpick .lqp-tile--empty{ background:#0B0F19; }
       
       /* layout robustness */
       #lora-quickpick .lqp-grid{ align-content:start; }
