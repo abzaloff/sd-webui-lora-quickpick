@@ -26,6 +26,7 @@ It adds a fast UI for selecting LoRAs in `txt2img` and `img2img`, so you do not 
 - Supports model preview images (`.png`, `.jpg`, `.jpeg`, `.webp`) when available.
 - Lets you select multiple LoRAs, reorder them, and set weights quickly.
 - Adds selected LoRAs to prompt automatically on **Generate**.
+- Supports Hires. fix, including Forge's gallery **✨** upscale button.
 - Reads trigger words from sidecar metadata and appends missing triggers.
 - Reads `preferred weight` from sidecar metadata when present.
 - Provides favorites, presets, and JSON backup/restore.
@@ -84,6 +85,8 @@ On generate, the extension temporarily injects:
 
 Then it restores the original prompt text in the input field.
 
+When using Hires. fix, the selected LoRAs are also injected into the hires prompt pass. In Forge Neo, this includes both the normal **Hires. fix** checkbox flow and the gallery **✨** button that sends the selected image to Hires. fix using the current hires settings.
+
 ## Previews
 
 - If a preview image exists near the LoRA, it is shown in grid mode.
@@ -94,6 +97,7 @@ Then it restores the original prompt text in the input field.
 - Designed first for Forge Neo.
 - Works stably on Stable Diffusion WebUI and classic Forge.
 - UI injection points: `txt2img`, `img2img`.
+- Hires. fix support covers the second-pass prompt and Forge's `txt2img_upscale` gallery action.
 
 ## Repository Structure
 

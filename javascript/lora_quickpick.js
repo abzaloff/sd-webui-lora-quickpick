@@ -708,27 +708,91 @@
     return res;
   }
 
+  function getPromptTextareasForGeneration(tab){
+    const fields = [];
+    const add = (selector) => {
+      const ta = qs(selector);
+      if (ta && !fields.includes(ta)) fields.push(ta);
+    };
+    add(`#${tab}_prompt textarea`);
+    if (tab === "txt2img") add("#txt2img_hr_prompt textarea");
+    return fields;
+  }
+
+  function augmentPromptTextareas(textareas, selected){
+    const changed = [];
+    const baseOriginal = (textareas[0] && textareas[0].value) || "";
+    textareas.forEach((ta) => {
+      if (!ta) return;
+      const original = ta.value || "";
+      const promptForAugment = original.trim() ? original : baseOriginal;
+      const augmented = buildAugmentedPrompt(promptForAugment, selected);
+      if (augmented === original) return;
+      ta.value = augmented;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+      changed.push({ ta, original });
+    });
+    return () => {
+      changed.forEach(({ ta, original }) => {
+        ta.value = original;
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+  }
+
+  function selectedForTab(tab){
+    const selFn = (window._lqpGetSelected || {})[tab];
+    if (!selFn) return [];
+    return selFn() || [];
+  }
+
+  function temporarilyAugmentTabPrompts(tab){
+    const promptTextareas = getPromptTextareasForGeneration(tab);
+    if (!promptTextareas.length) return false;
+    const sel = selectedForTab(tab);
+    if (!sel.length) return false;
+    const restore = augmentPromptTextareas(promptTextareas, sel);
+    setTimeout(restore, 400);
+    return true;
+  }
+
+  function isHiresActionElement(target){
+    const btn = target && target.closest && target.closest("button, input[type='button'], [role='button']");
+    if (!btn) return false;
+    if (btn.id === "txt2img_generate" || btn.id === "img2img_generate") return false;
+    const text = [
+      btn.id,
+      btn.getAttribute && btn.getAttribute("title"),
+      btn.getAttribute && btn.getAttribute("aria-label"),
+      btn.getAttribute && btn.getAttribute("value"),
+      btn.textContent,
+      btn.className,
+      btn.dataset && Object.values(btn.dataset).join(" "),
+    ].filter(Boolean).join(" ").toLowerCase();
+    return /(^|[_\W])(hi[-\s]?res|hires|high[-\s]?res|upscale|upscaler)([_\W]|$)/.test(text);
+  }
+
   function installGenerateHook() {
     qsa("#txt2img_generate, #img2img_generate").forEach((btn) => {
       if (btn.dataset._lqp_hooked) return;
       btn.dataset._lqp_hooked = "1";
       btn.addEventListener("click", () => {
         const tab = btn.id.startsWith("img2img") ? "img2img" : "txt2img";
-        const ta = qs(`#${tab}_prompt textarea`);
-        if (!ta) return;
-        const selFn = (window._lqpGetSelected || {})[tab];
-        if (!selFn) return;
-        const sel = selFn();
-        if (!sel.length) return;
-        const original = ta.value;
-        const augmented = buildAugmentedPrompt(original, sel);
-        if (augmented === original) return;
-        ta.value = augmented;
-        ta.dispatchEvent(new Event("input", { bubbles: true }));
-        setTimeout(() => { ta.value = original; ta.dispatchEvent(new Event("input", { bubbles: true })); }, 400);
+        temporarilyAugmentTabPrompts(tab);
       }, true);
     });
   }
+
+  function installHiresActionHook(){
+    if (window._lqpHiresActionHooked) return;
+    window._lqpHiresActionHooked = true;
+    document.addEventListener("click", (event) => {
+      if (!isHiresActionElement(event.target)) return;
+      temporarilyAugmentTabPrompts("txt2img");
+    }, true);
+  }
+
+  if (window.__LQP_TEST__) window._lqpTest = { buildAugmentedPrompt, augmentPromptTextareas, isHiresActionElement };
 
   async function mount() {
     const tick = async () => {
@@ -757,6 +821,7 @@
       }
       const hook = () => installGenerateHook();
       hook();
+      installHiresActionHook();
       if (!window._lqpMO){
         window._lqpMO = new MutationObserver(hook);
         window._lqpMO.observe(app(), { subtree:true, childList:true });
