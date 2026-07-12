@@ -46,24 +46,23 @@
       }
       #${EXT_ID} .lqp-label{ font-size:.9rem; opacity:.85; margin:0 0 .25rem; }
       #${EXT_ID} .lqp-box{
-        --lqp-actions-pad: 8px;
         position: relative;
-        min-height:38px; display:flex; flex-wrap:wrap; gap:.35rem; align-items:center;
+        min-height:38px; display:block;
         padding:.35rem .6rem .35rem .6rem;
-        padding-right: var(--lqp-actions-pad);
         border:1px solid var(--lqp-border); border-radius:.65rem;
         background: var(--lqp-bg); color: var(--lqp-text); cursor:text;
       }
       #${EXT_ID} .lqp-placeholder{ opacity:.6; }
-      #${EXT_ID} .lqp-chip{ display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .55rem; border:1px solid var(--lqp-border); border-radius:.75rem; background: var(--lqp-surface); }
+      #${EXT_ID} .lqp-chip{ display:inline-flex; align-items:center; gap:.35rem; margin:.175rem; vertical-align:middle; padding:.25rem .55rem; border:1px solid var(--lqp-border); border-radius:.75rem; background: var(--lqp-surface); }
       #${EXT_ID} .lqp-chip.off{ opacity:.45; filter:grayscale(.6); }
       #${EXT_ID} .lqp-w{ user-select:none; cursor:ew-resize; padding:0 .35rem; border:1px dashed var(--lqp-border); border-radius:.35rem; background: var(--lqp-bg); }
       #${EXT_ID} .lqp-x{ line-height:1; padding:0 .4rem; }
       #${EXT_ID} .lqp-spacer{ flex:1 1 auto; min-width:24px; }
       #${EXT_ID} .lqp-btn{ margin-left:.35rem; border:1px solid var(--lqp-border); border-radius:.55rem; background: var(--lqp-surface); color: var(--lqp-text); padding:.2rem .5rem; cursor:pointer; }
-      /* Sticky action bar (top-right) */
+      /* Top-right actions are floated so only the first chip row wraps around them. */
       #${EXT_ID} .lqp-actions{
-        position:absolute; top:6px; right:8px; display:flex; gap:.35rem; align-items:center; z-index:2;
+        float:right; position:static; display:flex; gap:.35rem; align-items:center; z-index:2;
+        margin:0 0 .25rem .35rem;
         background: transparent;
       }
       #${EXT_ID} .lqp-menu{ position:absolute; z-index:1000; left:0; right:auto; top: calc(100% + 6px); border:1px solid var(--lqp-border); border-radius:.65rem; background: var(--lqp-bg); display:flex; max-height:360px; overflow:hidden; box-shadow: 0 10px 28px var(--lqp-shadow); }
@@ -159,74 +158,9 @@
       themeSyncRAF = requestAnimationFrame(() => { themeSyncRAF = 0; syncThemeVars(); });
     }
 
-    function ensureActionsPadding(actions){
-      requestAnimationFrame(()=>{
-        const w = actions ? actions.getBoundingClientRect().width : 0;
-        box.style.setProperty("--lqp-actions-pad", Math.ceil(w + 14) + "px");
-      });
-    }
-
     function renderBox() {
       syncThemeVars();
       box.innerHTML = "";
-      if (!selected.size) {
-        box.append(el("span", { class: "lqp-placeholder" }, "Click to select LoRA..."));
-      } else {
-        Array.from(selected).forEach(([name, obj]) => {
-          const w = (obj && typeof obj.w === "number") ? clamp(obj.w, WEIGHT_MIN, WEIGHT_MAX) : 1.0;
-          const on = (obj && typeof obj.on === "boolean") ? obj.on : true;
-
-          const chip = el("div", { class: "lqp-chip" + (on ? "" : " off"), draggable: "true", dataset: { name } });
-          const chk = el("input", { type: "checkbox", ...(on ? {checked:"checked"} : {}) , title:"Enable/disable LoRA"});
-          const nm = el("span", {}, name);
-          const wt = el("span", { class: "lqp-w", title: "Drag horizontally (Alt for fine adjust)" }, w.toFixed(2));
-          const rm = el("button", { type: "button", class: "lqp-x", title: "Remove" }, "×");
-
-          let dragging = false, sx = 0, sw = w;
-          wt.addEventListener("mousedown", (e) => {
-            if (!selected.get(name)?.on) return;
-            e.preventDefault(); dragging = true; sx = e.clientX; sw = selected.get(name).w;
-          });
-          document.addEventListener("mousemove", (e) => {
-            if (!dragging) return;
-            const dragDiv = e.altKey ? 120 : 80;
-            const nw = clamp(Math.round((sw + (e.clientX - sx) / dragDiv) / 0.05) * 0.05, WEIGHT_MIN, WEIGHT_MAX);
-            const obj = selected.get(name) || {w:1,on:true};
-            obj.w = nw; selected.set(name, obj);
-            wt.textContent = nw.toFixed(2);
-          });
-          document.addEventListener("mouseup", () => (dragging = false));
-
-          rm.addEventListener("click", () => { selected.delete(name); renderBox(); });
-          chk.addEventListener("change", () => {
-            const obj = selected.get(name) || {w:1,on:true};
-            obj.on = chk.checked; selected.set(name, obj);
-            chip.classList.toggle("off", !chk.checked);
-          });
-
-          chip.addEventListener("dragstart", (e) => { dragName = name; e.dataTransfer.effectAllowed = "move"; });
-          chip.addEventListener("dragover", (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; });
-          chip.addEventListener("drop", (e) => {
-            e.preventDefault();
-            if (!dragName || dragName === name) return;
-            const keys = Array.from(selected.keys());
-            const from = keys.indexOf(dragName);
-            const to = keys.indexOf(name);
-            if (from < 0 || to < 0) return;
-            const moved = keys.splice(from, 1)[0];
-            keys.splice(to, 0, moved);
-            const newMap = new Map();
-            keys.forEach(k => newMap.set(k, selected.get(k)));
-            selected.clear();
-            keys.forEach(k => selected.set(k, newMap.get(k)));
-            renderBox();
-          });
-
-          chip.append(chk, nm, wt, rm);
-          box.append(chip);
-        });
-      }
-
       const actions = el("div", { class: "lqp-actions" });
       const addBtn = (title, text, onClick) => {
         const b = el("button", { class: "lqp-btn", type: "button", title }, text);
@@ -288,7 +222,63 @@
       addBtn("Clear all", "×", () => { selected.clear(); renderBox(); });
 
       box.append(actions);
-      ensureActionsPadding(actions);
+      if (!selected.size) {
+        box.append(el("span", { class: "lqp-placeholder" }, "Click to select LoRA..."));
+      } else {
+        Array.from(selected).forEach(([name, obj]) => {
+          const w = (obj && typeof obj.w === "number") ? clamp(obj.w, WEIGHT_MIN, WEIGHT_MAX) : 1.0;
+          const on = (obj && typeof obj.on === "boolean") ? obj.on : true;
+
+          const chip = el("div", { class: "lqp-chip" + (on ? "" : " off"), draggable: "true", dataset: { name } });
+          const chk = el("input", { type: "checkbox", ...(on ? {checked:"checked"} : {}) , title:"Enable/disable LoRA"});
+          const nm = el("span", {}, name);
+          const wt = el("span", { class: "lqp-w", title: "Drag horizontally (Alt for fine adjust)" }, w.toFixed(2));
+          const rm = el("button", { type: "button", class: "lqp-x", title: "Remove" }, "×");
+
+          let dragging = false, sx = 0, sw = w;
+          wt.addEventListener("mousedown", (e) => {
+            if (!selected.get(name)?.on) return;
+            e.preventDefault(); dragging = true; sx = e.clientX; sw = selected.get(name).w;
+          });
+          document.addEventListener("mousemove", (e) => {
+            if (!dragging) return;
+            const dragDiv = e.altKey ? 120 : 80;
+            const nw = clamp(Math.round((sw + (e.clientX - sx) / dragDiv) / 0.05) * 0.05, WEIGHT_MIN, WEIGHT_MAX);
+            const obj = selected.get(name) || {w:1,on:true};
+            obj.w = nw; selected.set(name, obj);
+            wt.textContent = nw.toFixed(2);
+          });
+          document.addEventListener("mouseup", () => (dragging = false));
+
+          rm.addEventListener("click", () => { selected.delete(name); renderBox(); });
+          chk.addEventListener("change", () => {
+            const obj = selected.get(name) || {w:1,on:true};
+            obj.on = chk.checked; selected.set(name, obj);
+            chip.classList.toggle("off", !chk.checked);
+          });
+
+          chip.addEventListener("dragstart", (e) => { dragName = name; e.dataTransfer.effectAllowed = "move"; });
+          chip.addEventListener("dragover", (e) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; });
+          chip.addEventListener("drop", (e) => {
+            e.preventDefault();
+            if (!dragName || dragName === name) return;
+            const keys = Array.from(selected.keys());
+            const from = keys.indexOf(dragName);
+            const to = keys.indexOf(name);
+            if (from < 0 || to < 0) return;
+            const moved = keys.splice(from, 1)[0];
+            keys.splice(to, 0, moved);
+            const newMap = new Map();
+            keys.forEach(k => newMap.set(k, selected.get(k)));
+            selected.clear();
+            keys.forEach(k => selected.set(k, newMap.get(k)));
+            renderBox();
+          });
+
+          chip.append(chk, nm, wt, rm);
+          box.append(chip);
+        });
+      }
     }
 
     function closeMenu() { const m = wrapper.querySelector(".lqp-menu"); if (m) m.remove(); }
