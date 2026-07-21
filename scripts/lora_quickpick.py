@@ -237,6 +237,42 @@ def _merge():
     return out_folders, out_trig, out_w
 
 
+def _lora_file_for_delete(key: str, name: str):
+    """Resolve one QuickPick item to a model file, without allowing path traversal."""
+    stem = (name or '').strip()
+    if not stem or stem != os.path.basename(stem) or os.path.splitext(stem)[1]:
+        return None
+
+    rel = (key or '').replace('\\', '/').strip('/')
+    tag = None
+    if rel.startswith('['):
+        try:
+            end = rel.index(']')
+            tag = rel[1:end]
+            rel = rel[end + 1:].strip('/')
+        except ValueError:
+            return None
+    if any(part in ('', '.', '..') for part in rel.split('/') if rel) or '..' in rel:
+        return None
+
+    for base in _get_lora_roots():
+        base_tag = os.path.basename(base) or os.path.basename(os.path.dirname(base))
+        if tag and tag != base_tag:
+            continue
+        root = os.path.realpath(base)
+        folder = os.path.realpath(os.path.join(root, *rel.split('/'))) if rel else root
+        try:
+            if os.path.commonpath([root, folder]) != root or not os.path.isdir(folder):
+                continue
+        except ValueError:
+            continue
+        for filename in os.listdir(folder):
+            candidate_stem, ext = os.path.splitext(filename)
+            if candidate_stem == stem and ext.lower() in EXTS:
+                return folder, os.path.join(folder, filename)
+    return None
+
+
 def _register(app: FastAPI):
     @app.get('/lora-quickpick/list')
     def list_api():
@@ -253,6 +289,41 @@ def _register(app: FastAPI):
             return w or {}
         except Exception:
             return {}
+
+    @app.post('/lora-quickpick/delete')
+    def delete_api(key: str = "", name: str = ""):
+        from fastapi import HTTPException
+
+        resolved = _lora_file_for_delete(key, name)
+        if not resolved:
+            raise HTTPException(status_code=404, detail="LoRA not found")
+
+        folder, model_path = resolved
+        model_stem, model_ext = os.path.splitext(model_path)
+        # Only the model and its directly associated QuickPick/Forge sidecars
+        # are in scope. Directories and unrelated files are never removed.
+        targets = [model_path]
+        for suffix in ('', '.preview'):
+            for ext in ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4', '.webm'):
+                sidecar = model_stem + suffix + ext
+                if os.path.isfile(sidecar):
+                    targets.append(sidecar)
+        for sidecar in (
+            model_stem + '.json',
+            model_stem + '_' + model_ext.lstrip('.').lower() + '.json',
+            model_stem + '-' + model_ext.lstrip('.').lower() + '.json',
+        ):
+            if os.path.isfile(sidecar):
+                targets.append(sidecar)
+
+        deleted = []
+        try:
+            for path in targets:
+                os.remove(path)
+                deleted.append(os.path.basename(path))
+        except OSError as err:
+            raise HTTPException(status_code=500, detail=f"Could not delete LoRA: {err}")
+        return {"deleted": deleted}
 
     @app.get('/lora-quickpick/preview')
     def preview_api(key: str = "", name: str = "", ext: str = "png"):

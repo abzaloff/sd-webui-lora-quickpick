@@ -30,6 +30,9 @@ It adds a fast UI for selecting LoRAs in `txt2img` and `img2img`, so you do not 
 - Reads trigger words from sidecar metadata and appends missing triggers.
 - Reads `preferred weight` from sidecar metadata when present.
 - Provides favorites, presets, and JSON backup/restore.
+- Right-click a LoRA to open its context menu:
+  - **Edit** opens Forge Neo's built-in LoRA metadata editor.
+  - **Delete** removes the LoRA model, its associated preview image(s), and sidecar JSON metadata after confirmation.
 
 ## Why Use It
 
@@ -77,7 +80,8 @@ It can extract:
 4. Select one or more LoRAs.
 5. Adjust order and weight.
    - Change weight by dragging the weight value left or right with the mouse.
-6. Click **Generate**.
+6. Right-click a LoRA in either view to edit its metadata or delete it.
+7. Click **Generate**.
 
 On generate, the extension temporarily injects:
 - Missing trigger words

@@ -87,6 +87,28 @@
       #${EXT_ID} .lqp-preset-menu .list{ max-height:320px; overflow:auto; padding:.25rem; background: var(--lqp-bg) !important; }
       #${EXT_ID} .lqp-preset-menu .row{ display:flex; align-items:center; justify-content:space-between; padding:.4rem .5rem; }
       #${EXT_ID} .lqp-preset-menu .row:hover{ background: var(--lqp-hover); }
+      #${EXT_ID} .lqp-context-menu{
+        position:fixed; z-index:1005; min-width:84px; padding:2px;
+        border:1px solid #3a4a60; border-radius:.4rem;
+        background:#172131 !important; opacity:1; box-shadow:0 8px 18px rgba(0,0,0,.5);
+      }
+      #${EXT_ID} .lqp-context-menu button{
+        display:block; width:100%; padding:.24rem .42rem; border:0; border-radius:.25rem;
+        text-align:left; font-size:.85rem; color:var(--lqp-text); background:transparent; cursor:pointer;
+      }
+      #${EXT_ID} .lqp-context-menu button:hover{ background:var(--lqp-hover); }
+      #${EXT_ID} .lqp-context-menu .lqp-danger{ color:#ff9b9b; }
+      #${EXT_ID} .lqp-confirm-overlay{
+        position:fixed; inset:0; z-index:1006; display:flex; align-items:center; justify-content:center;
+        background:rgba(0,0,0,.55);
+      }
+      #${EXT_ID} .lqp-confirm-dialog{
+        width:min(320px, calc(100vw - 32px)); padding:.85rem; border:1px solid #3a4a60;
+        border-radius:.55rem; background:#172131; color:var(--lqp-text); box-shadow:0 12px 30px rgba(0,0,0,.6);
+      }
+      #${EXT_ID} .lqp-confirm-actions{ display:flex; justify-content:flex-end; gap:.45rem; margin-top:.8rem; }
+      #${EXT_ID} .lqp-confirm-actions button{ padding:.3rem .65rem; border:1px solid var(--lqp-border); border-radius:.35rem; color:var(--lqp-text); background:var(--lqp-bg); cursor:pointer; }
+      #${EXT_ID} .lqp-confirm-actions .lqp-confirm-yes{ background:#8b3030; border-color:#b74b4b; }
       @media (max-width: 1200px){ #${EXT_ID} .lqp-left{ width:220px; } }
       /* Some mobile browsers request a desktop-width page; primary touch input is the reliable signal. */
       @media (max-width: 600px), (pointer: coarse){
@@ -135,6 +157,74 @@
 
   async function fetchJSON(url){ try{ const r = await fetch(url,{cache:"no-store"}); if(!r.ok) throw 0; return await r.json(); } catch{ return {}; } }
 
+  // Open Forge's existing metadata editor, so QuickPick and the LoRA page
+  // always edit the same user metadata and use the native save workflow.
+  function normalizeLoraName(value){
+    return String(value || "").replace(/\\/g, "/").replace(/\.(safetensors|ckpt|pt|bin)$/i, "").trim().toLowerCase();
+  }
+
+  function findNativeLoraCard(tabname, name, folder){
+    const wanted = new Set([
+      normalizeLoraName(name),
+      normalizeLoraName(folder ? `${folder}/${name}` : name),
+    ]);
+    const cards = qsa(`#${tabname}_lora_cards .card[data-name], #${tabname}_lora_pane .card[data-name]`);
+    return Array.from(cards).find(card => {
+      const cardName = normalizeLoraName(card.dataset.name);
+      return wanted.has(cardName) || Array.from(wanted).some(v => cardName.endsWith(`/${v}`));
+    }) || null;
+  }
+
+  function refreshAfterNativeLoraSave(tabname, onSaved){
+    const editor = qs(`#${tabname}_lora_edit_user_metadata`);
+    const saveButton = editor && Array.from(editor.querySelectorAll("button")).find(button => button.textContent.trim() === "Save");
+    if (!saveButton || typeof onSaved !== "function") return;
+
+    // Forge closes its popup only after its asynchronous save handler finishes.
+    // Watching that transition avoids reading the old sidecar JSON too early.
+    const onClick = () => {
+      saveButton.removeEventListener("click", onClick);
+      const popup = editor.closest(".global-popup") || qs(".global-popup");
+      let finished = false;
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        observer?.disconnect();
+        onSaved();
+      };
+      const isClosed = () => !popup || popup.style.display === "none";
+      const observer = popup ? new MutationObserver(() => { if (isClosed()) finish(); }) : null;
+      if (observer) observer.observe(popup, { attributes:true, attributeFilter:["style"] });
+      if (isClosed()) finish();
+      // Fallback for Forge themes that close the popup without changing its style.
+      setTimeout(finish, 3000);
+    };
+    saveButton.addEventListener("click", onClick);
+  }
+
+  function openNativeLoraEditor(tabname, name, folder, onSaved){
+    const card = findNativeLoraCard(tabname, name, folder);
+    const editButton = card && card.querySelector('.edit-button[onclick*="extraNetworksEditUserMetadata"], .edit-user-metadata');
+    if (editButton){
+      editButton.click();
+      refreshAfterNativeLoraSave(tabname, onSaved);
+      return true;
+    }
+
+    if (typeof window.extraNetworksEditUserMetadata !== "function") return false;
+    const cardName = card?.dataset.name || (folder ? `${folder}/${name}` : name);
+    const fakeCard = el("div", { dataset: { name: cardName } });
+    const fakeActions = el("div");
+    const fakeTarget = el("button");
+    fakeCard.append(fakeActions);
+    fakeActions.append(fakeTarget);
+    try{
+      window.extraNetworksEditUserMetadata({ target:fakeTarget, stopPropagation(){}, preventDefault(){} }, tabname, "lora");
+      refreshAfterNativeLoraSave(tabname, onSaved);
+      return true;
+    }catch(_){ return false; }
+  }
+
   function createUI(rootId = EXT_ID) {
     ensureStyles();
     const wrapper = el("div", { id: rootId });
@@ -147,12 +237,80 @@
 
     let menu = null;
     let presetMenu = null;
+    let contextMenu = null;
+    let refreshMenuData = null;
     const selected = new Map();
     let lastFolder = localStorage.getItem(LS_KEYS.lastFolder) || "";
     let favorites = getFavorites();
     let presets = readPresets();
     let dragName = null;
     let themeSyncRAF = 0;
+
+    function closeContextMenu(){
+      if (contextMenu) contextMenu.remove();
+      contextMenu = null;
+    }
+
+    function openDeleteConfirm(item){
+      const overlay = el("div", { class:"lqp-confirm-overlay", role:"presentation" });
+      const dialog = el("div", { class:"lqp-confirm-dialog", role:"dialog", "aria-modal":"true" });
+      const question = el("div", {}, "Are you sure you want to delete this LoRA?");
+      const actions = el("div", { class:"lqp-confirm-actions" });
+      const no = el("button", { type:"button" }, "No");
+      const yes = el("button", { class:"lqp-confirm-yes", type:"button" }, "Yes");
+      const close = () => overlay.remove();
+      no.addEventListener("click", close);
+      overlay.addEventListener("mousedown", event => { if (event.target === overlay) close(); });
+      yes.addEventListener("click", async () => {
+        yes.disabled = true; no.disabled = true; yes.textContent = "…";
+        try{
+          const params = new URLSearchParams({ key:item.folder || "", name:item.name });
+          const response = await fetch(`/lora-quickpick/delete?${params}`, { method:"POST" });
+          if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "Delete failed");
+          selected.delete(item.name);
+          const favoriteIndex = favorites.indexOf(`${item.folder}::${item.name}`);
+          if (favoriteIndex >= 0) {
+            favorites.splice(favoriteIndex, 1);
+            syncFavorites();
+          }
+          renderBox();
+          close();
+          if (refreshMenuData) await refreshMenuData();
+        }catch(error){
+          yes.disabled = false; no.disabled = false; yes.textContent = "Yes";
+          alert(error.message || "Could not delete LoRA");
+        }
+      });
+      actions.append(no, yes);
+      dialog.append(question, actions);
+      overlay.append(dialog);
+      wrapper.append(overlay);
+      no.focus();
+    }
+
+    function openContextMenu(event, item){
+      event.preventDefault();
+      event.stopPropagation();
+      closeContextMenu();
+      contextMenu = el("div", { class:"lqp-context-menu", role:"menu" });
+      const edit = el("button", { type:"button", role:"menuitem" }, "Edit");
+      contextMenu.addEventListener("mousedown", event => event.stopPropagation());
+      edit.addEventListener("click", () => {
+        const opened = openNativeLoraEditor(tabForTheme, item.name, item.folder, refreshMenuData);
+        closeContextMenu();
+        if (!opened) alert("Forge's built-in LoRA editor is not available. Open the LoRA page once, then try again.");
+      });
+      const remove = el("button", { class:"lqp-danger", type:"button", role:"menuitem" }, "Delete");
+      remove.addEventListener("click", () => { closeContextMenu(); openDeleteConfirm(item); });
+      contextMenu.append(edit, remove);
+      wrapper.append(contextMenu);
+      const margin = 8;
+      const width = contextMenu.offsetWidth;
+      const height = contextMenu.offsetHeight;
+      contextMenu.style.left = `${Math.max(margin, Math.min(event.clientX, window.innerWidth - width - margin))}px`;
+      contextMenu.style.top = `${Math.max(margin, Math.min(event.clientY, window.innerHeight - height - margin))}px`;
+      setTimeout(() => document.addEventListener("mousedown", closeContextMenu, { once:true }), 0);
+    }
 
     function syncThemeVars(){
       try{
@@ -541,6 +699,7 @@
             if (listStar) listStar.textContent = on ? '★' : '☆';
           });
           tile.addEventListener('click', ()=> r.click());
+          tile.addEventListener('contextmenu', (event) => openContextMenu(event, { name, folder:key }));
           tile.append(img, cap, star);
           grid.appendChild(tile);
         });
@@ -664,6 +823,7 @@
             localStorage.setItem(LS_KEYS.lastFolder, lastFolder);
             renderBox();
           });
+          row.addEventListener("contextmenu", (event) => openContextMenu(event, it));
           list.appendChild(row);
           if (idx===0) row.dataset.first = "1";
         });
@@ -687,6 +847,8 @@
         btn.textContent = old; btn.disabled = false;
         renderFolders(); renderLoras();
       }
+
+      refreshMenuData = () => refreshNow(refreshBtn);
 
       renderFolders(); renderLoras();
       search.focus();
