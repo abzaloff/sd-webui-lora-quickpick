@@ -53,9 +53,13 @@
         background: var(--lqp-bg); color: var(--lqp-text); cursor:text;
       }
       #${EXT_ID} .lqp-placeholder{ opacity:.6; }
-      #${EXT_ID} .lqp-chip{ display:inline-flex; align-items:center; gap:.35rem; margin:.175rem; vertical-align:middle; padding:.25rem .55rem; border:1px solid var(--lqp-border); border-radius:.75rem; background: var(--lqp-surface); }
+      #${EXT_ID} .lqp-box > .lqp-placeholder{ position:absolute; top:50%; left:.6rem; transform:translateY(-50%); }
+      #${EXT_ID} .lqp-chip{ position:relative; display:inline-flex; align-items:center; gap:.35rem; margin:.175rem; vertical-align:middle; padding:.25rem .55rem; border:1px solid var(--lqp-border); border-radius:.75rem; background: var(--lqp-surface); }
       #${EXT_ID} .lqp-chip.off{ opacity:.45; filter:grayscale(.6); }
       #${EXT_ID} .lqp-w{ user-select:none; cursor:ew-resize; padding:0 .35rem; border:1px dashed var(--lqp-border); border-radius:.35rem; background: var(--lqp-bg); }
+      #${EXT_ID} .lqp-weight-popover{ position:absolute; z-index:1002; top:calc(100% + .35rem); left:0; display:flex; align-items:center; gap:.45rem; min-width:190px; padding:.5rem .6rem; border:1px solid var(--lqp-border); border-radius:.55rem; background:var(--lqp-surface); box-shadow:0 8px 20px var(--lqp-shadow); }
+      #${EXT_ID} .lqp-weight-popover input{ flex:1 1 auto; min-width:0; }
+      #${EXT_ID} .lqp-weight-popover output{ min-width:3.3em; text-align:right; font-variant-numeric:tabular-nums; }
       #${EXT_ID} .lqp-x{ line-height:1; padding:0 .4rem; }
       #${EXT_ID} .lqp-spacer{ flex:1 1 auto; min-width:24px; }
       #${EXT_ID} .lqp-btn{ margin-left:.35rem; border:1px solid var(--lqp-border); border-radius:.55rem; background: var(--lqp-surface); color: var(--lqp-text); padding:.2rem .5rem; cursor:pointer; }
@@ -84,6 +88,22 @@
       #${EXT_ID} .lqp-preset-menu .row{ display:flex; align-items:center; justify-content:space-between; padding:.4rem .5rem; }
       #${EXT_ID} .lqp-preset-menu .row:hover{ background: var(--lqp-hover); }
       @media (max-width: 1200px){ #${EXT_ID} .lqp-left{ width:220px; } }
+      @media (max-width: 600px){
+        #${EXT_ID} .lqp-box{ padding-right:.4rem; }
+        #${EXT_ID} .lqp-actions{ gap:.18rem; margin-left:.2rem; }
+        #${EXT_ID} .lqp-actions .lqp-btn{ padding:.16rem .3rem; }
+        #${EXT_ID} .lqp-w{ cursor:pointer; min-height:1.65rem; display:inline-flex; align-items:center; }
+        #${EXT_ID} .lqp-weight-popover{ position:fixed; left:20px; right:20px; min-width:0; box-sizing:border-box; }
+        #${EXT_ID} .lqp-menu{ height:min(70vh, 520px) !important; max-height:70vh !important; }
+        #${EXT_ID} .lqp-left{ width:76px !important; flex:0 0 76px; }
+        #${EXT_ID} .lqp-folder{ padding:.55rem .35rem; white-space:normal; overflow-wrap:anywhere; }
+        #${EXT_ID} .lqp-top{ flex-wrap:wrap; align-items:center; }
+        #${EXT_ID} .lqp-search{ flex:1 1 145px; min-width:0; }
+        #${EXT_ID} .lqp-all{ flex:0 1 auto; white-space:nowrap; }
+        #${EXT_ID} .lqp-refresh{ flex:0 0 auto; }
+        #${EXT_ID} .lqp-modebar{ order:3; flex:1 1 100%; flex-wrap:wrap; }
+        #${EXT_ID} .lqp-size-btn{ display:none; }
+      }
     `;
     document.head.appendChild(style);
     try{
@@ -120,7 +140,7 @@
     const tabForTheme = (rootId === EXT_ID_IMG2IMG) ? "img2img" : "txt2img";
     const label = el("div", { class: "lqp-label" }, "LoRA QuickPick");
     const box = el("div", { class: "lqp-box", tabindex: "0" });
-    const placeholder = el("span", { class: "lqp-placeholder" }, "Click to select LoRA...");
+    const placeholder = el("span", { class: "lqp-placeholder" }, "Select LoRA");
     box.append(placeholder);
     wrapper.append(label, box);
 
@@ -223,7 +243,7 @@
 
       box.append(actions);
       if (!selected.size) {
-        box.append(el("span", { class: "lqp-placeholder" }, "Click to select LoRA..."));
+        box.append(el("span", { class: "lqp-placeholder" }, "Select LoRA"));
       } else {
         Array.from(selected).forEach(([name, obj]) => {
           const w = (obj && typeof obj.w === "number") ? clamp(obj.w, WEIGHT_MIN, WEIGHT_MAX) : 1.0;
@@ -232,7 +252,7 @@
           const chip = el("div", { class: "lqp-chip" + (on ? "" : " off"), draggable: "true", dataset: { name } });
           const chk = el("input", { type: "checkbox", ...(on ? {checked:"checked"} : {}) , title:"Enable/disable LoRA"});
           const nm = el("span", {}, name);
-          const wt = el("span", { class: "lqp-w", title: "Drag horizontally (Alt for fine adjust)" }, w.toFixed(2));
+          const wt = el("span", { class: "lqp-w", title: "Drag horizontally (Alt for fine adjust); tap to set precisely", role:"button", tabindex:"0" }, w.toFixed(2));
           const rm = el("button", { type: "button", class: "lqp-x", title: "Remove" }, "×");
 
           let dragging = false, sx = 0, sw = w;
@@ -249,6 +269,45 @@
             wt.textContent = nw.toFixed(2);
           });
           document.addEventListener("mouseup", () => (dragging = false));
+
+          const openWeightPopover = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            wrapper.querySelectorAll(".lqp-weight-popover").forEach(p => p.remove());
+            const popover = el("div", { class: "lqp-weight-popover" });
+            const slider = el("input", { type:"range", min:String(WEIGHT_MIN), max:String(WEIGHT_MAX), step:"0.05", value:String(selected.get(name)?.w ?? w), "aria-label":`Weight for ${name}` });
+            const value = el("output", {}, Number(slider.value).toFixed(2));
+            const applyWeight = () => {
+              const obj = selected.get(name) || {w:1,on:true};
+              obj.w = clamp(Number(slider.value), WEIGHT_MIN, WEIGHT_MAX);
+              selected.set(name, obj);
+              wt.textContent = obj.w.toFixed(2);
+              value.textContent = obj.w.toFixed(2);
+            };
+            slider.addEventListener("input", applyWeight);
+            popover.addEventListener("pointerdown", ev => ev.stopPropagation());
+            popover.append(slider, value);
+            chip.append(popover);
+            if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) {
+              const rect = wt.getBoundingClientRect();
+              const top = Math.min(rect.bottom + 10, window.innerHeight - popover.offsetHeight - 20);
+              popover.style.top = `${Math.max(20, top)}px`;
+            }
+            slider.focus();
+            const close = (ev) => {
+              if (!popover.contains(ev.target) && ev.target !== wt) {
+                popover.remove();
+                document.removeEventListener("pointerdown", close, true);
+              }
+            };
+            setTimeout(() => document.addEventListener("pointerdown", close, true), 0);
+          };
+          wt.addEventListener("click", (e) => {
+            if (window.matchMedia && window.matchMedia("(pointer: coarse)").matches) openWeightPopover(e);
+          });
+          wt.addEventListener("keydown", (e) => {
+            if (e.key === "Enter" || e.key === " ") openWeightPopover(e);
+          });
 
           rm.addEventListener("click", () => { selected.delete(name); renderBox(); });
           chk.addEventListener("change", () => {
@@ -405,6 +464,12 @@
       #lora-quickpick .lqp-grid--s .lqp-tile{ width: calc((100% - 4*var(--lqp-gap, 12px))/5) !important; }
       #lora-quickpick .lqp-grid--m .lqp-tile{ width: calc((100% - 3*var(--lqp-gap, 12px))/4) !important; }
       #lora-quickpick .lqp-grid--l .lqp-tile{ width: calc((100% - 2*var(--lqp-gap, 12px))/3) !important; }
+      @media (max-width:600px){
+        #lora-quickpick .lqp-grid{ gap:.5rem !important; }
+        #lora-quickpick .lqp-grid--s .lqp-tile,
+        #lora-quickpick .lqp-grid--m .lqp-tile,
+        #lora-quickpick .lqp-grid--l .lqp-tile{ width:calc((100% - .5rem)/2) !important; }
+      }
       /* Ensure intrinsic height via square spacer */
       #lora-quickpick .lqp-tile{ position:relative; display:block; overflow:hidden; }
       #lora-quickpick .lqp-tile::before{ content:""; display:block; padding-top:100%; }
@@ -432,9 +497,9 @@
       const modeBar = el('div', { class:'lqp-modebar' });
       const btnList = el('button', { class:'lqp-btn', title:'List', type:'button' }, '≣');
       const btnGrid = el('button', { class:'lqp-btn', title:'Grid',  type:'button' }, '▦');
-      const btnS = el('button', { class:'lqp-btn', title:'5 per row', type:'button' }, 'S');
-      const btnM = el('button', { class:'lqp-btn', title:'4 per row', type:'button' }, 'M');
-      const btnL = el('button', { class:'lqp-btn', title:'3 per row', type:'button' }, 'L');
+      const btnS = el('button', { class:'lqp-btn lqp-size-btn', title:'5 per row', type:'button' }, 'S');
+      const btnM = el('button', { class:'lqp-btn lqp-size-btn', title:'4 per row', type:'button' }, 'M');
+      const btnL = el('button', { class:'lqp-btn lqp-size-btn', title:'3 per row', type:'button' }, 'L');
       modeBar.append(btnList, btnGrid, btnS, btnM, btnL);
       top.append(modeBar);
 
