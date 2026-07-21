@@ -88,7 +88,8 @@
       #${EXT_ID} .lqp-preset-menu .row{ display:flex; align-items:center; justify-content:space-between; padding:.4rem .5rem; }
       #${EXT_ID} .lqp-preset-menu .row:hover{ background: var(--lqp-hover); }
       @media (max-width: 1200px){ #${EXT_ID} .lqp-left{ width:220px; } }
-      @media (max-width: 600px){
+      /* Some mobile browsers request a desktop-width page; primary touch input is the reliable signal. */
+      @media (max-width: 600px), (pointer: coarse){
         #${EXT_ID} .lqp-box{ padding-right:.4rem; }
         #${EXT_ID} .lqp-actions{ gap:.18rem; margin-left:.2rem; }
         #${EXT_ID} .lqp-actions .lqp-btn{ padding:.16rem .3rem; }
@@ -464,7 +465,7 @@
       #lora-quickpick .lqp-grid--s .lqp-tile{ width: calc((100% - 4*var(--lqp-gap, 12px))/5) !important; }
       #lora-quickpick .lqp-grid--m .lqp-tile{ width: calc((100% - 3*var(--lqp-gap, 12px))/4) !important; }
       #lora-quickpick .lqp-grid--l .lqp-tile{ width: calc((100% - 2*var(--lqp-gap, 12px))/3) !important; }
-      @media (max-width:600px){
+      @media (max-width:600px), (pointer:coarse){
         #lora-quickpick .lqp-grid{ gap:.5rem !important; }
         #lora-quickpick .lqp-grid--s .lqp-tile,
         #lora-quickpick .lqp-grid--m .lqp-tile,
