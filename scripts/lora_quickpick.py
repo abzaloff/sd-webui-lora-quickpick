@@ -1,5 +1,5 @@
 
-import os, json
+import os, json, shutil
 from typing import List
 from fastapi import FastAPI
 import gradio as gr
@@ -237,12 +237,8 @@ def _merge():
     return out_folders, out_trig, out_w
 
 
-def _lora_file_for_delete(key: str, name: str):
-    """Resolve one QuickPick item to a model file, without allowing path traversal."""
-    stem = (name or '').strip()
-    if not stem or stem != os.path.basename(stem) or os.path.splitext(stem)[1]:
-        return None
-
+def _folder_for_key(key: str):
+    """Resolve a displayed QuickPick folder key to an existing LoRA directory."""
     rel = (key or '').replace('\\', '/').strip('/')
     tag = None
     if rel.startswith('['):
@@ -266,11 +262,44 @@ def _lora_file_for_delete(key: str, name: str):
                 continue
         except ValueError:
             continue
+        return folder
+    return None
+
+def _lora_file_for_delete(key: str, name: str):
+    """Resolve one QuickPick item to a model file, without allowing path traversal."""
+    stem = (name or '').strip()
+    if not stem or stem != os.path.basename(stem) or os.path.splitext(stem)[1]:
+        return None
+
+    folder = _folder_for_key(key)
+    if not folder:
+        return None
+    try:
         for filename in os.listdir(folder):
             candidate_stem, ext = os.path.splitext(filename)
             if candidate_stem == stem and ext.lower() in EXTS:
                 return folder, os.path.join(folder, filename)
+    except OSError:
+        return None
     return None
+
+def _associated_lora_files(model_path: str):
+    """Return only the model and its recognised preview/metadata sidecars."""
+    model_stem, model_ext = os.path.splitext(model_path)
+    targets = [model_path]
+    for suffix in ('', '.preview'):
+        for ext in ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4', '.webm'):
+            sidecar = model_stem + suffix + ext
+            if os.path.isfile(sidecar):
+                targets.append(sidecar)
+    for sidecar in (
+        model_stem + '.json',
+        model_stem + '_' + model_ext.lstrip('.').lower() + '.json',
+        model_stem + '-' + model_ext.lstrip('.').lower() + '.json',
+    ):
+        if os.path.isfile(sidecar):
+            targets.append(sidecar)
+    return targets
 
 
 def _register(app: FastAPI):
@@ -298,23 +327,10 @@ def _register(app: FastAPI):
         if not resolved:
             raise HTTPException(status_code=404, detail="LoRA not found")
 
-        folder, model_path = resolved
-        model_stem, model_ext = os.path.splitext(model_path)
+        _, model_path = resolved
         # Only the model and its directly associated QuickPick/Forge sidecars
         # are in scope. Directories and unrelated files are never removed.
-        targets = [model_path]
-        for suffix in ('', '.preview'):
-            for ext in ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4', '.webm'):
-                sidecar = model_stem + suffix + ext
-                if os.path.isfile(sidecar):
-                    targets.append(sidecar)
-        for sidecar in (
-            model_stem + '.json',
-            model_stem + '_' + model_ext.lstrip('.').lower() + '.json',
-            model_stem + '-' + model_ext.lstrip('.').lower() + '.json',
-        ):
-            if os.path.isfile(sidecar):
-                targets.append(sidecar)
+        targets = _associated_lora_files(model_path)
 
         deleted = []
         try:
@@ -324,6 +340,36 @@ def _register(app: FastAPI):
         except OSError as err:
             raise HTTPException(status_code=500, detail=f"Could not delete LoRA: {err}")
         return {"deleted": deleted}
+
+    @app.post('/lora-quickpick/move')
+    def move_api(key: str = "", name: str = "", destination: str = ""):
+        from fastapi import HTTPException
+
+        resolved = _lora_file_for_delete(key, name)
+        destination_folder = _folder_for_key(destination)
+        if not resolved:
+            raise HTTPException(status_code=404, detail="LoRA not found")
+        if not destination_folder:
+            raise HTTPException(status_code=404, detail="Destination folder not found")
+
+        source_folder, model_path = resolved
+        if os.path.normcase(os.path.realpath(source_folder)) == os.path.normcase(os.path.realpath(destination_folder)):
+            return {"moved": []}
+
+        files = _associated_lora_files(model_path)
+        moves = [(path, os.path.join(destination_folder, os.path.basename(path))) for path in files]
+        conflicts = [os.path.basename(target) for _, target in moves if os.path.exists(target)]
+        if conflicts:
+            raise HTTPException(status_code=409, detail=f"Destination already contains: {', '.join(conflicts)}")
+
+        moved = []
+        try:
+            for source, target in moves:
+                shutil.move(source, target)
+                moved.append(os.path.basename(target))
+        except OSError as err:
+            raise HTTPException(status_code=500, detail=f"Could not move LoRA: {err}")
+        return {"moved": moved}
 
     @app.get('/lora-quickpick/preview')
     def preview_api(key: str = "", name: str = "", ext: str = "png"):

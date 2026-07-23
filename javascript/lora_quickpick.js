@@ -109,6 +109,12 @@
       #${EXT_ID} .lqp-confirm-actions{ display:flex; justify-content:flex-end; gap:.45rem; margin-top:.8rem; }
       #${EXT_ID} .lqp-confirm-actions button{ padding:.3rem .65rem; border:1px solid var(--lqp-border); border-radius:.35rem; color:var(--lqp-text); background:var(--lqp-bg); cursor:pointer; }
       #${EXT_ID} .lqp-confirm-actions .lqp-confirm-yes{ background:#8b3030; border-color:#b74b4b; }
+      #${EXT_ID} .lqp-move-dialog{ max-height:min(500px, calc(100vh - 32px)); display:flex; flex-direction:column; }
+      #${EXT_ID} .lqp-move-title{ margin-bottom:.55rem; }
+      #${EXT_ID} .lqp-move-list{ overflow:auto; border:1px solid #3a4a60; border-radius:.35rem; }
+      #${EXT_ID} .lqp-move-list button{ display:block; width:100%; padding:.38rem .5rem; border:0; text-align:left; color:var(--lqp-text); background:transparent; cursor:pointer; }
+      #${EXT_ID} .lqp-move-list button:hover{ background:var(--lqp-hover); }
+      #${EXT_ID} .lqp-move-list button:disabled{ opacity:.45; cursor:default; }
       @media (max-width: 1200px){ #${EXT_ID} .lqp-left{ width:220px; } }
       /* Some mobile browsers request a desktop-width page; primary touch input is the reliable signal. */
       @media (max-width: 600px), (pointer: coarse){
@@ -288,6 +294,53 @@
       no.focus();
     }
 
+    function openMoveDialog(item){
+      const overlay = el("div", { class:"lqp-confirm-overlay", role:"presentation" });
+      const dialog = el("div", { class:"lqp-confirm-dialog lqp-move-dialog", role:"dialog", "aria-modal":"true" });
+      const title = el("div", { class:"lqp-move-title" }, "Move to…");
+      const list = el("div", { class:"lqp-move-list" });
+      const actions = el("div", { class:"lqp-confirm-actions" });
+      const cancel = el("button", { type:"button" }, "Cancel");
+      const close = () => overlay.remove();
+      const folders = Object.keys(State.folders || {}).sort((a, b) => a.localeCompare(b));
+
+      if (!folders.length) {
+        list.append(el("div", { style:{ padding:".45rem", opacity:".65" } }, "No destination folders found"));
+      }
+      folders.forEach(folder => {
+        const isCurrent = folder === item.folder;
+        const button = el("button", { type:"button", ...(isCurrent ? { disabled:"disabled" } : {}) }, folder || "(root)");
+        if (isCurrent) button.title = "Current folder";
+        button.addEventListener("click", async () => {
+          list.querySelectorAll("button").forEach(control => control.disabled = true);
+          try{
+            const params = new URLSearchParams({ key:item.folder || "", name:item.name, destination:folder });
+            const response = await fetch(`/lora-quickpick/move?${params}`, { method:"POST" });
+            if (!response.ok) throw new Error((await response.json().catch(() => ({}))).detail || "Move failed");
+            const oldFavorite = `${item.folder}::${item.name}`;
+            const favoriteIndex = favorites.indexOf(oldFavorite);
+            if (favoriteIndex >= 0) {
+              favorites[favoriteIndex] = `${folder}::${item.name}`;
+              syncFavorites();
+            }
+            close();
+            if (refreshMenuData) await refreshMenuData();
+          }catch(error){
+            list.querySelectorAll("button").forEach(control => control.disabled = control.title === "Current folder");
+            alert(error.message || "Could not move LoRA");
+          }
+        });
+        list.append(button);
+      });
+      cancel.addEventListener("click", close);
+      overlay.addEventListener("mousedown", event => { if (event.target === overlay) close(); });
+      actions.append(cancel);
+      dialog.append(title, list, actions);
+      overlay.append(dialog);
+      wrapper.append(overlay);
+      cancel.focus();
+    }
+
     function openContextMenu(event, item){
       event.preventDefault();
       event.stopPropagation();
@@ -300,9 +353,11 @@
         closeContextMenu();
         if (!opened) alert("Forge's built-in LoRA editor is not available. Open the LoRA page once, then try again.");
       });
+      const move = el("button", { type:"button", role:"menuitem" }, "Move to…");
+      move.addEventListener("click", () => { closeContextMenu(); openMoveDialog(item); });
       const remove = el("button", { class:"lqp-danger", type:"button", role:"menuitem" }, "Delete");
       remove.addEventListener("click", () => { closeContextMenu(); openDeleteConfirm(item); });
-      contextMenu.append(edit, remove);
+      contextMenu.append(edit, move, remove);
       wrapper.append(contextMenu);
       const margin = 8;
       const width = contextMenu.offsetWidth;

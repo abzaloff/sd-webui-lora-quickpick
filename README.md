@@ -32,6 +32,7 @@ It adds a fast UI for selecting LoRAs in `txt2img` and `img2img`, so you do not 
 - Provides favorites, presets, and JSON backup/restore.
 - Right-click a LoRA to open its context menu:
   - **Edit** opens Forge Neo's built-in LoRA metadata editor.
+  - **Move to…** moves the LoRA model, associated preview image(s), and sidecar JSON metadata to another detected LoRA folder.
   - **Delete** removes the LoRA model, its associated preview image(s), and sidecar JSON metadata after confirmation.
 
 ## Why Use It
