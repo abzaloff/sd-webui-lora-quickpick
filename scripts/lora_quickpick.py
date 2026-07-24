@@ -238,7 +238,7 @@ def _merge():
 
 
 def _folder_for_key(key: str):
-    """Resolve a displayed QuickPick folder key to an existing LoRA directory."""
+    """Resolve a displayed folder key, including a directory symlink inside a LoRA root."""
     rel = (key or '').replace('\\', '/').strip('/')
     tag = None
     if rel.startswith('['):
@@ -255,8 +255,11 @@ def _folder_for_key(key: str):
         base_tag = os.path.basename(base) or os.path.basename(os.path.dirname(base))
         if tag and tag != base_tag:
             continue
-        root = os.path.realpath(base)
-        folder = os.path.realpath(os.path.join(root, *rel.split('/'))) if rel else root
+        # Check the lexical path, not realpath(). A directory symlink located
+        # under the configured LoRA root may intentionally point to an external
+        # training-output folder. Dot segments have already been rejected above.
+        root = os.path.abspath(base)
+        folder = os.path.abspath(os.path.join(root, *rel.split('/'))) if rel else root
         try:
             if os.path.commonpath([root, folder]) != root or not os.path.isdir(folder):
                 continue

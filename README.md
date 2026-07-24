@@ -101,6 +101,7 @@ When using Hires. fix, the selected LoRAs are also injected into the hires promp
 
 - Designed first for Forge Neo.
 - Works stably on Stable Diffusion WebUI and classic Forge.
+- Move and delete actions support LoRAs stored in directory symlinks beneath a configured LoRA root.
 - UI injection points: `txt2img`, `img2img`.
 - Hires. fix support covers the second-pass prompt and Forge's `txt2img_upscale` gallery action.
 
