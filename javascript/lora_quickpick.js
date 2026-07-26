@@ -737,7 +737,7 @@
           const isFav = favorites.includes(favKey);
           const enc = encodeURIComponent; const base = `/lora-quickpick/preview?name=${enc(name)}${key?`&key=${enc(key)}`:''}`;
           const v = (window._lqpImgVer || Date.now());
-          const cands = [base+`&ext=png&v=${v}`, base+`&ext=jpg&v=${v}`, base+`&ext=jpeg&v=${v}`, base+`&ext=webp&v=${v}`];
+          const cands = ["png", "jpg", "jpeg", "webp", "jxl", "avif", "heif", "gif"].map(ext => base+`&ext=${ext}&v=${v}`);
           const tile = el('button', { class:'lqp-tile', type:'button', title:name });
           const img = new Image(); img.className='lqp-tile__img'; let i=0; img.onerror=()=>{ if(i<cands.length) img.src=cands[i++]; else { img.remove(); tile.classList.add('lqp-tile--empty'); } }; img.onload=()=>{}; img.src=cands[i++];
           const cap = el('div', { class:'lqp-tile__caption' }, name);

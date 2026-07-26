@@ -39,6 +39,7 @@ _lqp_logging.getLogger("asyncio").addFilter(_LQPAsyncio10054Filter())
 
 
 EXTS = ('.safetensors', '.pt', '.ckpt', '.bin')
+PREVIEW_EXTS = ('.png', '.jpg', '.jpeg', '.webp', '.jxl', '.avif', '.heif', '.gif', '.mp4', '.webm')
 CANDIDATE_DIRNAMES = ['Lora','LoRA','LORAs','Loras','loras','lora']
 
 def _split_paths(raw: str):
@@ -287,21 +288,40 @@ def _lora_file_for_delete(key: str, name: str):
     return None
 
 def _associated_lora_files(model_path: str):
-    """Return only the model and its recognised preview/metadata sidecars."""
+    """Return the model and its Forge/QuickPick preview and metadata sidecars."""
     model_stem, model_ext = os.path.splitext(model_path)
     targets = [model_path]
+    known = {os.path.normcase(model_path)}
+
+    def add(path):
+        key = os.path.normcase(path)
+        if os.path.isfile(path) and key not in known:
+            known.add(key)
+            targets.append(path)
+
     for suffix in ('', '.preview'):
-        for ext in ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.mp4', '.webm'):
-            sidecar = model_stem + suffix + ext
-            if os.path.isfile(sidecar):
-                targets.append(sidecar)
+        for ext in PREVIEW_EXTS:
+            add(model_stem + suffix + ext)
     for sidecar in (
         model_stem + '.json',
         model_stem + '_' + model_ext.lstrip('.').lower() + '.json',
         model_stem + '-' + model_ext.lstrip('.').lower() + '.json',
+        model_stem + '.civitai.info',
+        model_stem + '.txt',
     ):
-        if os.path.isfile(sidecar):
-            targets.append(sidecar)
+        add(sidecar)
+
+    # Forge writes its preview as <model-name>.<samples_format>. Any custom
+    # image format follows that same convention, so keep exact-stem sidecars
+    # too. Other model files are deliberately excluded.
+    folder, stem_name = os.path.dirname(model_path), os.path.basename(model_stem)
+    try:
+        for filename in os.listdir(folder):
+            candidate_stem, ext = os.path.splitext(filename)
+            if candidate_stem == stem_name and ext.lower() not in EXTS:
+                add(os.path.join(folder, filename))
+    except OSError:
+        pass
     return targets
 
 
@@ -379,7 +399,7 @@ def _register(app: FastAPI):
         from fastapi.responses import FileResponse
         from fastapi import Response
         ext = (ext or "").lower()
-        if not name or ext not in {'png','jpg','jpeg','webp'}:
+        if not name or ext not in {item.lstrip('.') for item in PREVIEW_EXTS}:
             return Response(status_code=400)
         roots = _get_lora_roots()
         rel = key or ""
