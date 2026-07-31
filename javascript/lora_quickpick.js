@@ -63,6 +63,13 @@
       #${EXT_ID} .lqp-x{ line-height:1; padding:0 .4rem; }
       #${EXT_ID} .lqp-spacer{ flex:1 1 auto; min-width:24px; }
       #${EXT_ID} .lqp-btn{ margin-left:.35rem; border:1px solid var(--lqp-border); border-radius:.55rem; background: var(--lqp-surface); color: var(--lqp-text); padding:.2rem .5rem; cursor:pointer; }
+      #${EXT_ID} .lqp-copy-icon{ position:relative; display:inline-block; width:.78rem; height:.78rem; vertical-align:middle; }
+      #${EXT_ID} .lqp-copy-icon::before, #${EXT_ID} .lqp-copy-icon::after{
+        content:""; position:absolute; width:.52rem; height:.52rem; box-sizing:border-box;
+        border:1.25px solid currentColor; border-radius:.16rem;
+      }
+      #${EXT_ID} .lqp-copy-icon::before{ left:0; bottom:0; }
+      #${EXT_ID} .lqp-copy-icon::after{ right:0; top:0; background:var(--lqp-surface); }
       /* Top-right actions are floated so only the first chip row wraps around them. */
       #${EXT_ID} .lqp-actions{
         float:right; position:static; display:flex; gap:.35rem; align-items:center; z-index:2;
@@ -162,6 +169,24 @@
   function writePresets(obj){ localStorage.setItem(LS_KEYS.presets, JSON.stringify(obj||{})); }
 
   async function fetchJSON(url){ try{ const r = await fetch(url,{cache:"no-store"}); if(!r.ok) throw 0; return await r.json(); } catch{ return {}; } }
+
+  async function copyText(text){
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      try {
+        await navigator.clipboard.writeText(text);
+        return;
+      } catch(_){}
+    }
+
+    const textarea = el("textarea", { readonly:"readonly", "aria-hidden":"true" });
+    textarea.value = text;
+    Object.assign(textarea.style, { position:"fixed", left:"-9999px", top:"0", opacity:"0" });
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    if (!copied) throw new Error("Clipboard copy failed");
+  }
 
   // Open Forge's existing metadata editor, so QuickPick and the LoRA page
   // always edit the same user metadata and use the native save workflow.
@@ -419,6 +444,20 @@
       });
 
       addBtn("Load preset", "📂", () => { openPresetMenu(actions); });
+
+      addBtn("Copy LoRA names", el("span", { class:"lqp-copy-icon", "aria-hidden":"true" }), async () => {
+        try {
+          await copyText(Array.from(selected.keys()).join("="));
+          selected.forEach((value, name) => {
+            const item = value || { w:1, on:true };
+            item.on = false;
+            selected.set(name, item);
+          });
+          renderBox();
+        } catch(_) {
+          alert("Failed to copy LoRA names");
+        }
+      });
 
       addBtn("Export favorites and presets (JSON)", "⇩", () => {
         const data = { version:"1.0", favorites, presets };
