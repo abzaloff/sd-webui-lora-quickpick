@@ -441,7 +441,8 @@ def _register(app: FastAPI):
                 for nm in name_variants(name):
                     for f in files:
                         stem, file_ext = os.path.splitext(f)
-                        if stem.lower() == nm.lower() and file_ext.lower() in image_exts:
+                        is_match = (stem.lower() == nm.lower()) or (stem.lower() == f"{nm.lower()}.preview")
+                        if is_match and file_ext.lower() in image_exts: 
                             p1 = os.path.join(cur, f"{nm}.{ext}")
                             return FileResponse(
                                 p1 if os.path.exists(p1) else os.path.join(cur, f),
