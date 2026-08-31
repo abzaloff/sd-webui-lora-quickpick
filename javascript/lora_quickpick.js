@@ -663,9 +663,9 @@
       #lora-quickpick .lqp-btn{ padding:.35rem .6rem; border:1px solid var(--lqp-border); background: var(--lqp-surface); color: var(--lqp-text); border-radius:.5rem; cursor:pointer; }
       #lora-quickpick .lqp-btn.is-active{ outline:2px solid var(--lqp-active); }
       #lora-quickpick .lqp-grid{ overflow:auto; padding:.35rem; background: var(--lqp-bg); display:grid; gap:.75rem; }
-      #lora-quickpick .lqp-grid--s{ grid-template-columns: repeat(5, 1fr); }
-      #lora-quickpick .lqp-grid--m{ grid-template-columns: repeat(4, 1fr); }
-      #lora-quickpick .lqp-grid--l{ grid-template-columns: repeat(3, 1fr); }
+      #lora-quickpick .lqp-grid--s{ grid-template-columns: repeat(6, 1fr); }
+      #lora-quickpick .lqp-grid--m{ grid-template-columns: repeat(5, 1fr); }
+      #lora-quickpick .lqp-grid--l{ grid-template-columns: repeat(4, 1fr); }
       #lora-quickpick .lqp-tile{ position:relative; aspect-ratio:1/1; border:1px solid var(--lqp-border); border-radius:.6rem; overflow:hidden; display:flex; align-items=end; justify-content:center; background:var(--lqp-surface); }
       #lora-quickpick .lqp-tile__img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
       #lora-quickpick .lqp-tile__caption{ position:relative; z-index:1; padding:.35rem .5rem; background:var(--lqp-overlay); width:100%; text-align:center; font-size:.85rem; color:var(--lqp-text); }
@@ -714,9 +714,9 @@
         width:100% !important; align-content:flex-start !important; justify-content:flex-start !important;
       }
       #lora-quickpick .lqp-grid .lqp-tile{ width:100%; min-width:0; box-sizing:border-box; }
-      #lora-quickpick .lqp-grid--s .lqp-tile{ width: calc((100% - 4*var(--lqp-gap, 12px))/5) !important; }
-      #lora-quickpick .lqp-grid--m .lqp-tile{ width: calc((100% - 3*var(--lqp-gap, 12px))/4) !important; }
-      #lora-quickpick .lqp-grid--l .lqp-tile{ width: calc((100% - 2*var(--lqp-gap, 12px))/3) !important; }
+      #lora-quickpick .lqp-grid--s .lqp-tile{ width: calc((100% - 5*var(--lqp-gap, 12px))/6) !important; }
+      #lora-quickpick .lqp-grid--m .lqp-tile{ width: calc((100% - 4*var(--lqp-gap, 12px))/5) !important; }
+      #lora-quickpick .lqp-grid--l .lqp-tile{ width: calc((100% - 3*var(--lqp-gap, 12px))/4) !important; }
       @media (max-width:600px), (pointer:coarse){
         #lora-quickpick .lqp-grid{ gap:.5rem !important; }
         #lora-quickpick .lqp-grid--s .lqp-tile,
@@ -750,9 +750,9 @@
       const modeBar = el('div', { class:'lqp-modebar' });
       const btnList = el('button', { class:'lqp-btn', title:'List', type:'button' }, '≣');
       const btnGrid = el('button', { class:'lqp-btn', title:'Grid',  type:'button' }, '▦');
-      const btnS = el('button', { class:'lqp-btn lqp-size-btn', title:'5 per row', type:'button' }, 'S');
-      const btnM = el('button', { class:'lqp-btn lqp-size-btn', title:'4 per row', type:'button' }, 'M');
-      const btnL = el('button', { class:'lqp-btn lqp-size-btn', title:'3 per row', type:'button' }, 'L');
+      const btnS = el('button', { class:'lqp-btn lqp-size-btn', title:'6 per row', type:'button' }, 'S');
+      const btnM = el('button', { class:'lqp-btn lqp-size-btn', title:'5 per row', type:'button' }, 'M');
+      const btnL = el('button', { class:'lqp-btn lqp-size-btn', title:'4 per row', type:'button' }, 'L');
       modeBar.append(btnList, btnGrid, btnS, btnM, btnL);
       top.append(modeBar);
 
