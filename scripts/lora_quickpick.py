@@ -5,19 +5,25 @@ from fastapi import FastAPI
 import gradio as gr
 from modules import script_callbacks, shared
 
-# --- LoRA QuickPick: filter out ONLY asyncio WinError 10054 noise (robust) ---
+# --- LoRA QuickPick: filter out ONLY benign asyncio/Windows socket noise (robust) ---
+# Windows' Proactor event loop logs a traceback when the browser aborts a request
+# (e.g. a cancelled image/video load) and the socket is already gone:
+#   10054 = connection reset, 10053 = connection aborted,
+#   10038 = not a socket,     10022 = invalid argument (socket.shutdown)
 import logging as _lqp_logging
+_LQP_BENIGN_WINERRORS = (10054, 10053, 10038, 10022)
+
 def _lqp_is_10054(record):
     try:
         # 1) Check exception info carried by the log record
         exc_info = getattr(record, "exc_info", None)
         if exc_info and isinstance(exc_info, tuple):
             _etype, _e, _tb = exc_info
-            if isinstance(_e, ConnectionResetError) or getattr(_e, "winerror", None) == 10054:
+            if isinstance(_e, ConnectionError) or getattr(_e, "winerror", None) in _LQP_BENIGN_WINERRORS:
                 return True
-        # 2) Check formatted message text for Proactor callback and code 10054
+        # 2) Check formatted message text for the Proactor callback
         msg = record.getMessage() if hasattr(record, "getMessage") else str(getattr(record, "msg", ""))
-        if "_ProactorBasePipeTransport._call_connection_lost" in msg and "10054" in msg:
+        if "_ProactorBasePipeTransport._call_connection_lost" in msg:
             return True
     except Exception:
         pass
@@ -272,7 +278,7 @@ def _folder_for_key(key: str):
 def _lora_file_for_delete(key: str, name: str):
     """Resolve one QuickPick item to a model file, without allowing path traversal."""
     stem = (name or '').strip()
-    if not stem or stem != os.path.basename(stem) or os.path.splitext(stem)[1]:
+    if (not stem or stem in ('.', '..') or '/' in stem or '\\' in stem):
         return None
 
     folder = _folder_for_key(key)
@@ -398,56 +404,84 @@ def _register(app: FastAPI):
     def preview_api(key: str = "", name: str = "", ext: str = "png"):
         from fastapi.responses import FileResponse
         from fastapi import Response
-        ext = (ext or "").lower()
-        if not name or ext not in {item.lstrip('.') for item in PREVIEW_EXTS}:
+        ext = (ext or "").lower().lstrip('.')
+        name = (name or "").strip()
+        # name must be a plain file stem (no path separators / traversal)
+        if (not name or '/' in name or '\\' in name or name in ('.', '..')
+                or ext not in {item.lstrip('.') for item in PREVIEW_EXTS}):
             return Response(status_code=400)
-        roots = _get_lora_roots()
-        rel = key or ""
+
+        rel = (key or "").replace('\\', '/')
         tag = None
         if rel.startswith('['):
             try:
                 end = rel.index(']')
                 tag = rel[1:end]
-                rel = rel[end+1:].lstrip('/')
+                rel = rel[end+1:]
             except ValueError:
                 pass
-        rel = rel.replace('..','').strip('/').replace('\\','/')
-        def try_send(p):
-            if os.path.exists(p):
-                return FileResponse(p, headers={'Cache-Control':'public, max-age=604800'})
-            return None
+        rel = rel.replace('..', '').strip('/')
+
+        headers = {'Cache-Control': 'public, max-age=604800'}
+        # Both "<name>.<ext>" and "<name>.preview.<ext>" are valid preview names.
+        suffixes = ('', '.preview')
+
         def name_variants(stem):
-            yield stem
-            yield stem.replace(' ', '_')
-            yield stem.replace('_', ' ')
-        if rel:
-            for base in _get_lora_roots():
-                base_tag = os.path.basename(base) or os.path.basename(os.path.dirname(base))
-                if tag and base_tag != tag:
-                    continue
-                for nm in name_variants(name):
-                    cand = os.path.join(base, rel, f"{nm}.{ext}")
-                    hit = try_send(cand)
-                    if hit: return hit
-                    for alt in (f"{nm}.{ext}".lower(), f"{nm}.{ext}".upper()):
-                        hit = try_send(os.path.join(base, rel, alt))
-                        if hit: return hit
-        image_exts = {'.png', '.jpg', '.jpeg', '.webp'}
+            seen_v = set()
+            for v in (stem, stem.replace(' ', '_'), stem.replace('_', ' ')):
+                if v not in seen_v:
+                    seen_v.add(v)
+                    yield v
+
+        def try_send(p):
+            if os.path.isfile(p):
+                return FileResponse(p, headers=headers)
+            return None
+
+        # 1) exact lookup in the folder the UI asked for (incl. the root folder)
+        for base in _get_lora_roots():
+            base_tag = os.path.basename(base) or os.path.basename(os.path.dirname(base))
+            if tag and base_tag != tag:
+                continue
+            folder = os.path.join(base, rel) if rel else base
+            for nm in name_variants(name):
+                for suf in suffixes:
+                    fname = f"{nm}{suf}.{ext}"
+                    for alt in (fname, fname.lower(), fname.upper()):
+                        hit = try_send(os.path.join(folder, alt))
+                        if hit:
+                            return hit
+
+        # 2) fallback: search the tree, case-insensitive, any common image type
+        image_exts = {'.png', '.jpg', '.jpeg', '.webp', '.' + ext}
+        wanted = '.' + ext
         for base in _get_lora_roots():
             base_depth = base.count(os.sep)
             for cur, _, files in os.walk(base, followlinks=True):
                 if cur.count(os.sep) - base_depth > 6:
                     continue
+                best, best_score = None, None
                 for nm in name_variants(name):
+                    nm_l = nm.lower()
                     for f in files:
                         stem, file_ext = os.path.splitext(f)
-                        if stem.lower() == nm.lower() and file_ext.lower() in image_exts:
-                            p1 = os.path.join(cur, f"{nm}.{ext}")
-                            return FileResponse(
-                                p1 if os.path.exists(p1) else os.path.join(cur, f),
-                                headers={'Cache-Control':'public, max-age=604800'}
-                            )
+                        file_ext = file_ext.lower()
+                        if file_ext not in image_exts:
+                            continue
+                        stem_l = stem.lower()
+                        if stem_l == nm_l:
+                            is_preview = 0
+                        elif stem_l == nm_l + '.preview':
+                            is_preview = 1
+                        else:
+                            continue
+                        score = (file_ext != wanted, is_preview)
+                        if best_score is None or score < best_score:
+                            best, best_score = f, score
+                if best:
+                    return FileResponse(os.path.join(cur, best), headers=headers)
         return Response(status_code=404)
+
 def on_app_started(_: gr.Blocks, app: FastAPI):
     _register(app)
 

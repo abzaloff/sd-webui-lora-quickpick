@@ -776,9 +776,41 @@
           const isFav = favorites.includes(favKey);
           const enc = encodeURIComponent; const base = `/lora-quickpick/preview?name=${enc(name)}${key?`&key=${enc(key)}`:''}`;
           const v = (window._lqpImgVer || Date.now());
-          const cands = ["png", "jpg", "jpeg", "webp", "jxl", "avif", "heif", "gif"].map(ext => base+`&ext=${ext}&v=${v}`);
+          const IMG_EXTS = ["png", "jpg", "jpeg", "webp", "jxl", "avif", "heif", "gif"];
+          const VID_EXTS = ["mp4", "webm"];
+          const cands = IMG_EXTS.concat(VID_EXTS).map(ext => ({ ext, url: base+`&ext=${ext}&v=${v}` }));
           const tile = el('button', { class:'lqp-tile', type:'button', title:name });
-          const img = new Image(); img.className='lqp-tile__img'; let i=0; img.onerror=()=>{ if(i<cands.length) img.src=cands[i++]; else { img.remove(); tile.classList.add('lqp-tile--empty'); } }; img.onload=()=>{}; img.src=cands[i++];
+          // Try every preview type in turn: images first, then videos (.mp4/.webm).
+          let media = null, i = 0;
+          const setMedia = (node) => { if (media && media.parentNode) media.replaceWith(node); media = node; };
+          const tryNext = () => {
+            if (i >= cands.length) {
+              if (media) media.remove();
+              tile.classList.add('lqp-tile--empty');
+              return;
+            }
+            const c = cands[i++];
+            if (VID_EXTS.includes(c.ext)) {
+              const vid = document.createElement('video');
+              vid.className = 'lqp-tile__img';
+              vid.muted = true; vid.loop = true; vid.playsInline = true;
+              vid.setAttribute('muted', ''); vid.setAttribute('playsinline', '');
+              vid.preload = 'metadata';
+              vid.onerror = tryNext;
+              vid.src = c.url + '#t=0.1';   // show first frame as the thumbnail
+              setMedia(vid);
+            } else {
+              const im = new Image();
+              im.className = 'lqp-tile__img';
+              im.onerror = tryNext;
+              im.src = c.url;
+              setMedia(im);
+            }
+          };
+          tryNext();
+          // play video previews only while hovered (keeps the grid light)
+          tile.addEventListener('mouseenter', () => { if (media && media.tagName === 'VIDEO') media.play().catch(()=>{}); });
+          tile.addEventListener('mouseleave', () => { if (media && media.tagName === 'VIDEO') { media.pause(); try { media.currentTime = 0.1; } catch(e){} } });
           const cap = el('div', { class:'lqp-tile__caption' }, name);
           const star = el('span', { class:'star', title:'Add to favorites / remove' }, isFav ? '★' : '☆');
           star.addEventListener('click', (e)=>{
@@ -794,7 +826,7 @@
           });
           tile.addEventListener('click', ()=> r.click());
           tile.addEventListener('contextmenu', (event) => openContextMenu(event, { name, folder:key }));
-          tile.append(img, cap, star);
+          tile.append(media, cap, star);
           grid.appendChild(tile);
         });
         grid.scrollTop = prevScroll;                // <--- and restore it
